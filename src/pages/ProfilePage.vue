@@ -35,6 +35,43 @@
       </form>
     </div>
 
+    <!-- Cambiar contraseña -->
+    <div class="bg-slate-900 rounded-2xl p-6 border border-slate-800">
+      <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Cambiar contraseña</h2>
+      <form @submit.prevent="handleChangePassword" class="space-y-3">
+        <div>
+          <label class="block text-sm text-slate-400 mb-1">Nueva contraseña</label>
+          <input
+            v-model="newPassword"
+            type="password"
+            required
+            minlength="6"
+            placeholder="Mínimo 6 caracteres"
+            class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-600"
+          />
+        </div>
+        <div>
+          <label class="block text-sm text-slate-400 mb-1">Confirmar contraseña</label>
+          <input
+            v-model="confirmPassword"
+            type="password"
+            required
+            minlength="6"
+            placeholder="Repetí la nueva contraseña"
+            class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-slate-600"
+          />
+        </div>
+        <p v-if="passwordError" class="text-red-400 text-sm">{{ passwordError }}</p>
+        <button
+          type="submit"
+          :disabled="savingPassword"
+          class="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-medium py-2 rounded-lg transition-colors"
+        >
+          {{ savingPassword ? 'Guardando...' : 'Cambiar contraseña' }}
+        </button>
+      </form>
+    </div>
+
     <!-- Historial de predicciones -->
     <div class="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden">
       <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider px-4 pt-4 pb-3">
@@ -124,6 +161,34 @@ async function handleUpdateUsername() {
     toastError(msg)
   } finally {
     savingProfile.value = false
+  }
+}
+
+// Change password
+const newPassword = ref('')
+const confirmPassword = ref('')
+const savingPassword = ref(false)
+const passwordError = ref('')
+
+async function handleChangePassword() {
+  passwordError.value = ''
+  if (newPassword.value !== confirmPassword.value) {
+    passwordError.value = 'Las contraseñas no coinciden'
+    return
+  }
+  savingPassword.value = true
+  try {
+    const { error } = await supabase.auth.updateUser({ password: newPassword.value })
+    if (error) throw error
+    toastSuccess('Contraseña actualizada correctamente')
+    newPassword.value = ''
+    confirmPassword.value = ''
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Error al cambiar la contraseña'
+    passwordError.value = msg
+    toastError(msg)
+  } finally {
+    savingPassword.value = false
   }
 }
 
