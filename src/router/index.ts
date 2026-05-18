@@ -54,4 +54,14 @@ router.beforeEach(async (to) => {
   }
 })
 
+// Chunk caducado (deploy nuevo con hashes distintos): forzar recarga completa
+router.onError((error, to) => {
+  const isStaleChunk =
+    error.message.includes('Failed to fetch dynamically imported module') ||
+    error.message.includes('Importing a module script failed')
+  if (isStaleChunk) {
+    window.location.assign(to.fullPath)
+  }
+})
+
 export default router
