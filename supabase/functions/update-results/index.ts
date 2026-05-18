@@ -63,9 +63,21 @@ function finalScore(score: ApiMatch['score']): ScoreDetail {
   return score.fullTime
 }
 
+const CRON_SECRET = Deno.env.get('CRON_SECRET')
+
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 })
+  }
+
+  if (CRON_SECRET) {
+    const incoming = req.headers.get('x-cron-secret')
+    if (incoming !== CRON_SECRET) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
   }
 
   if (!FOOTBALL_API_KEY) {

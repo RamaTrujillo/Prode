@@ -10,12 +10,13 @@ PWA para predecir los resultados del Mundial de Fútbol 2026. Los usuarios predi
 
 - Predicción de marcadores para todos los partidos del Mundial (fase de grupos y eliminatorias)
 - Sistema de puntos automático calculado al finalizar cada partido
-- Tabla de posiciones en tiempo real
+- Tabla de posiciones en tiempo real con tu posición destacada
 - Filtro de partidos por fase (Grupos / Octavos / Cuartos / Semis / Final)
 - Infinite scroll con skeleton loader
-- Banderas de los países en cada partido
+- Banderas de los países en cada partido (via flagcdn.com)
 - Indicador de cierre de predicciones (cuando el partido arranca en menos de 24hs)
 - Historial de predicciones del usuario con resultados
+- Cambio de contraseña desde el perfil
 - PWA instalable (funciona en móvil como app nativa)
 - Actualización automática de resultados cada 5 minutos
 
@@ -47,6 +48,7 @@ En partidos que van a tiempo extra, el puntaje se calcula sobre el resultado al 
 - Node.js 20+
 - Cuenta en [Supabase](https://supabase.com) con un proyecto creado
 - Token de [football-data.org](https://www.football-data.org) (plan gratuito)
+- [Supabase CLI](https://supabase.com/docs/guides/cli) (solo para deploy de Edge Functions)
 
 ### Pasos
 
@@ -102,16 +104,45 @@ El proyecto se despliega automáticamente en cada push a `main` via GitHub Actio
 
 La función `update-results` consulta la API de football-data.org y sincroniza todos los partidos del Mundial en la base de datos. Se ejecuta automáticamente cada 5 minutos via pg_cron.
 
-### Deploy
+### 1. Configurar secrets en Supabase
 
 ```bash
-supabase functions deploy update-results
+# Generar un secreto aleatorio
+openssl rand -hex 32
+
+supabase secrets set FOOTBALL_API_KEY=tu_token_de_football_data_org
+supabase secrets set CRON_SECRET=el_secreto_generado_arriba
 ```
 
-### Secrets necesarios en Supabase
+### 2. Desplegar la función
 
 ```bash
-supabase secrets set FOOTBALL_API_KEY=tu_token
+supabase functions deploy update-results --no-verify-jwt
+```
+
+### 3. Configurar el cron job
+
+En **Supabase Dashboard → SQL Editor**, eliminar el job anterior (si existe) y crear uno nuevo:
+
+```sql
+-- Eliminar job anterior si existe
+SELECT cron.unschedule('update-match-results');
+
+-- Crear job con el secret como header
+SELECT cron.schedule(
+  'update-match-results',
+  '*/5 * * * *',
+  $$
+  SELECT net.http_post(
+    url     := 'https://<project-ref>.supabase.co/functions/v1/update-results',
+    headers := jsonb_build_object(
+      'Content-Type',  'application/json',
+      'x-cron-secret', 'el_mismo_cron_secret_de_arriba'
+    ),
+    body    := '{}'::jsonb
+  );
+  $$
+);
 ```
 
 ## Gestión de usuarios
@@ -134,6 +165,6 @@ src/
 └── types/            # index.ts
 
 supabase/
-├── functions/update-results/   # Edge Function
+├── functions/update-results/   # Edge Function (sincroniza resultados via football-data.org)
 └── migrations/                 # Schema SQL
 ```
