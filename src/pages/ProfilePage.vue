@@ -180,9 +180,11 @@ async function handleChangePassword() {
   try {
     const { error } = await supabase.auth.updateUser({ password: newPassword.value })
     if (error) throw error
-    toastSuccess('Contraseña actualizada correctamente')
     newPassword.value = ''
     confirmPassword.value = ''
+    toastSuccess('Contraseña actualizada. Volvé a iniciar sesión.')
+    await signOut()
+    router.push('/login')
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Error al cambiar la contraseña'
     passwordError.value = msg

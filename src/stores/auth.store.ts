@@ -16,10 +16,12 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = session?.user ?? null
     if (user.value) await fetchProfile()
 
-    supabase.auth.onAuthStateChange(async (_event: AuthChangeEvent, session: Session | null) => {
+    supabase.auth.onAuthStateChange((_event: AuthChangeEvent, session: Session | null) => {
       user.value = session?.user ?? null
+      // No await de llamadas a Supabase dentro del callback: corre con el lock
+      // de auth tomado y deadlockearía updateUser/signOut. Lo diferimos.
       if (user.value) {
-        await fetchProfile()
+        setTimeout(() => { void fetchProfile() }, 0)
       } else {
         profile.value = null
       }
