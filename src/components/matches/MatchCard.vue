@@ -83,9 +83,11 @@ const stageLabel = computed(() => {
   const { stage, group_name } = props.match
   if (stage === 'group') return group_name ? `Grupo ${group_name}` : 'Fase de grupos'
   const map: Record<string, string> = {
+    round_of_32: 'Dieciseisavos de final',
     round_of_16: 'Octavos de final',
     quarter: 'Cuartos de final',
     semi: 'Semifinal',
+    third_place: 'Tercer puesto',
     final: 'Final',
   }
   return map[stage] ?? stage

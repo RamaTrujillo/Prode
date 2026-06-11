@@ -8,7 +8,7 @@ const supabase = createClient(
 const FOOTBALL_API_KEY = Deno.env.get('FOOTBALL_API_KEY')!
 const API_BASE = 'https://api.football-data.org/v4'
 
-type MatchStage = 'group' | 'round_of_16' | 'quarter' | 'semi' | 'final'
+type MatchStage = 'group' | 'round_of_32' | 'round_of_16' | 'quarter' | 'semi' | 'third_place' | 'final'
 
 interface ScoreDetail {
   home: number | null
@@ -32,9 +32,11 @@ interface ApiMatch {
 
 const STAGE_MAP: Record<string, MatchStage> = {
   GROUP_STAGE:    'group',
+  LAST_32:        'round_of_32',
   LAST_16:        'round_of_16',
   QUARTER_FINALS: 'quarter',
   SEMI_FINALS:    'semi',
+  THIRD_PLACE:    'third_place',
   FINAL:          'final',
 }
 

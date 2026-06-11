@@ -155,9 +155,11 @@ const activeStage = ref<StageFilter>('all')
 const tabs: { label: string; value: StageFilter }[] = [
   { label: 'Todos', value: 'all' },
   { label: 'Grupos', value: 'group' },
+  { label: '16avos', value: 'round_of_32' },
   { label: 'Octavos', value: 'round_of_16' },
   { label: 'Cuartos', value: 'quarter' },
   { label: 'Semis', value: 'semi' },
+  { label: '3er puesto', value: 'third_place' },
   { label: 'Final', value: 'final' },
 ]
 
