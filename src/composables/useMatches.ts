@@ -4,7 +4,7 @@ import { useMatchesStore } from '@/stores/matches.store'
 
 export function useMatches() {
   const store = useMatchesStore()
-  const { matches, loading, upcomingMatches, liveMatches, finishedMatches, matchesByDate } =
+  const { matches, loading, upcomingMatches, liveMatches, finishedMatches } =
     storeToRefs(store)
 
   onMounted(async () => {
@@ -22,7 +22,6 @@ export function useMatches() {
     upcomingMatches,
     liveMatches,
     finishedMatches,
-    matchesByDate,
     fetchMatchById: store.fetchMatchById,
   }
 }

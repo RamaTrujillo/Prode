@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { subscribeToTable } from '@/lib/realtime'
 import { useAuthStore } from '@/stores/auth.store'
 import type { LeaderboardEntry } from '@/types'
 
@@ -30,16 +31,14 @@ export const useLeaderboardStore = defineStore('leaderboard', () => {
   }
 
   function subscribeToLeaderboard() {
-    channel = supabase
-      .channel('leaderboard:live')
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'users_profile' },
-        () => {
-          fetchLeaderboard()
-        }
-      )
-      .subscribe()
+    channel = subscribeToTable({
+      channel: 'leaderboard:live',
+      table: 'users_profile',
+      event: 'UPDATE',
+      onChange: () => {
+        fetchLeaderboard()
+      },
+    })
   }
 
   function unsubscribe() {

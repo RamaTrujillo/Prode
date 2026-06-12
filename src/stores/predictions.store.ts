@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { subscribeToTable } from '@/lib/realtime'
 import type { Prediction } from '@/types'
 
 export const usePredictionsStore = defineStore('predictions', () => {
@@ -69,23 +70,17 @@ export const usePredictionsStore = defineStore('predictions', () => {
     supabase.auth.getUser().then(({ data }) => {
       const uid = data.user?.id
       if (!uid) return
-      channel = supabase
-        .channel('predictions:points')
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'predictions',
-            filter: `user_id=eq.${uid}`,
-          },
-          (payload: import('@supabase/supabase-js').RealtimePostgresChangesPayload<Prediction>) => {
-            const updated = payload.new as Prediction
-            const idx = predictions.value.findIndex((p: Prediction) => p.id === updated.id)
-            if (idx !== -1) predictions.value[idx] = updated
-          }
-        )
-        .subscribe()
+      channel = subscribeToTable({
+        channel: 'predictions:points',
+        table: 'predictions',
+        event: 'UPDATE',
+        filter: `user_id=eq.${uid}`,
+        onChange: (payload) => {
+          const updated = payload.new as Prediction
+          const idx = predictions.value.findIndex((p: Prediction) => p.id === updated.id)
+          if (idx !== -1) predictions.value[idx] = updated
+        },
+      })
     })
   }
 
