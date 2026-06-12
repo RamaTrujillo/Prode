@@ -5,7 +5,11 @@
   <template v-else>
     <AppHeader />
     <main class="max-w-2xl mx-auto px-4 pt-4 pb-24">
-      <RouterView />
+      <RouterView v-slot="{ Component }">
+        <keep-alive :include="['home']">
+          <component :is="Component" />
+        </keep-alive>
+      </RouterView>
     </main>
     <AppNav />
     <BaseToast />

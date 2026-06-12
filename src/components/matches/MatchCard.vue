@@ -28,8 +28,8 @@
         <p v-if="match.status === 'finished'" class="text-white font-bold text-lg">
           {{ match.home_score }} - {{ match.away_score }}
         </p>
-        <p v-else-if="match.status === 'live'" class="text-red-400 font-bold text-sm animate-pulse">
-          EN VIVO
+        <p v-else-if="match.status === 'live'" class="text-red-400 font-bold text-lg">
+          {{ match.home_score ?? 0 }} - {{ match.away_score ?? 0 }}
         </p>
         <p v-else class="text-slate-400 text-sm">{{ matchTime }}</p>
       </div>
@@ -52,7 +52,12 @@
       <span class="text-xs px-2 py-0.5 rounded-full"
         :class="predictionClasses">
         Tu prode: {{ prediction.home_score }}-{{ prediction.away_score }}
-        <span v-if="prediction.points !== null"> · {{ prediction.points }}pts</span>
+        <span v-if="prediction.points !== null"> · {{ prediction.points }}{{ ptsUnit(prediction.points) }}</span>
+      </span>
+    </div>
+    <div v-else-if="match.status === 'finished'" class="mt-2 text-center">
+      <span class="text-xs px-2 py-0.5 rounded-full" :class="pointsBadgeClasses(0)">
+        Sin prode · 0{{ ptsUnit(0) }}
       </span>
     </div>
     <div v-else-if="match.status === 'scheduled'" class="mt-2 text-center">
@@ -65,6 +70,7 @@
 import { computed } from 'vue'
 import type { Match, Prediction } from '@/types'
 import { getFlagUrl } from '@/utils/flags'
+import { pointsBadgeClasses, ptsUnit } from '@/utils/points'
 
 const props = defineProps<{
   match: Match
@@ -102,11 +108,5 @@ const deadlineLabel = computed(() => {
   return `Cierra en ${Math.floor(hoursUntil)}hs`
 })
 
-const predictionClasses = computed(() => {
-  const p = props.prediction
-  if (!p || p.points === null) return 'bg-slate-800 text-slate-400'
-  if (p.points === 3) return 'bg-green-950 text-green-400'
-  if (p.points === 1) return 'bg-yellow-950 text-yellow-400'
-  return 'bg-red-950 text-red-400'
-})
+const predictionClasses = computed(() => pointsBadgeClasses(props.prediction?.points ?? null))
 </script>

@@ -1,5 +1,17 @@
 <template>
-  <div v-if="match" class="max-w-lg mx-auto space-y-6">
+  <div class="max-w-lg mx-auto space-y-6">
+    <!-- Volver a la vista anterior -->
+    <button
+      @click="goBack"
+      class="flex items-center gap-1 text-slate-400 hover:text-white text-sm transition-colors"
+    >
+      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+      </svg>
+      Volver
+    </button>
+
+    <div v-if="match" class="space-y-6">
     <!-- Header del partido -->
     <div class="bg-slate-900 rounded-2xl p-6 border border-slate-800">
       <div class="text-center mb-4">
@@ -24,6 +36,9 @@
         <div class="text-center">
           <p v-if="match.status === 'finished'" class="text-3xl font-bold text-white">
             {{ match.home_score }} - {{ match.away_score }}
+          </p>
+          <p v-else-if="match.status === 'live'" class="text-3xl font-bold text-red-400">
+            {{ match.home_score ?? 0 }} - {{ match.away_score ?? 0 }}
           </p>
           <p v-else class="text-2xl text-slate-500 font-light">vs</p>
         </div>
@@ -50,8 +65,8 @@
           <p class="text-slate-300">Predijiste: <span class="text-white font-bold">{{ existing.home_score }} - {{ existing.away_score }}</span></p>
           <p class="text-slate-300">Resultado: <span class="text-white font-bold">{{ match.home_score }} - {{ match.away_score }}</span></p>
           <p class="mt-3 text-2xl font-bold"
-            :class="existing.points === 3 ? 'text-green-400' : existing.points === 1 ? 'text-yellow-400' : 'text-red-400'">
-            {{ existing.points ?? '?' }} pts
+            :class="pointsTextClasses(existing.points)">
+            {{ existing.points ?? '?' }} {{ ptsUnit(existing.points) }}
           </p>
         </div>
         <p v-else class="text-slate-500 text-sm">No hiciste predicción para este partido</p>
@@ -108,23 +123,34 @@
     </div>
   </div>
 
-  <!-- Loading / no encontrado -->
-  <div v-else class="flex justify-center py-16">
-    <div v-if="loading" class="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-    <p v-else class="text-slate-500">Partido no encontrado</p>
+    <!-- Loading / no encontrado -->
+    <div v-else class="flex justify-center py-16">
+      <div v-if="loading" class="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      <p v-else class="text-slate-500">Partido no encontrado</p>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { useMatchesStore } from '@/stores/matches.store'
 import { usePredictionsStore } from '@/stores/predictions.store'
 import { useToast } from '@/composables/useToast'
 import { getFlagUrlLarge } from '@/utils/flags'
+import { pointsTextClasses, ptsUnit } from '@/utils/points'
 
 const route = useRoute()
+const router = useRouter()
+
+// Vuelve a donde se abrió (Home con su pestaña, Perfil, etc.). Si se entró por
+// link directo / refresh y no hay historial previo, cae al inicio.
+function goBack() {
+  if (window.history.state?.back) router.back()
+  else router.push('/')
+}
+
 const matchesStore = useMatchesStore()
 const { currentMatch: match, loading } = storeToRefs(matchesStore)
 

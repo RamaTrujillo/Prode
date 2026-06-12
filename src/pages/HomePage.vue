@@ -71,7 +71,25 @@
         </div>
       </template>
 
-      <!-- ── Vista normal (live / próximos / recientes) ────────────────── -->
+      <!-- ── Recientes (todos los resultados, sin agrupar) ─────────────── -->
+      <template v-else-if="activeStage === 'recent'">
+        <section v-if="recentMatches.length > 0">
+          <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Recientes</h2>
+          <div class="space-y-3">
+            <MatchCard
+              v-for="match in recentMatches"
+              :key="match.id"
+              :match="match"
+              :prediction="predictionByMatchId(match.id)"
+            />
+          </div>
+        </section>
+        <div v-else class="text-center py-12 text-slate-500">
+          <p>Todavía no hay resultados</p>
+        </div>
+      </template>
+
+      <!-- ── Vista normal (en vivo / próximos) ─────────────────────────── -->
       <template v-else>
         <!-- En vivo -->
         <section v-if="filteredLive.length > 0">
@@ -106,23 +124,6 @@
           <div ref="upcomingSentinel" class="h-px" />
         </section>
 
-        <!-- Recientes — infinite scroll -->
-        <section v-if="filteredRecent.length > 0">
-          <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Recientes</h2>
-          <div class="space-y-3">
-            <MatchCard
-              v-for="match in visibleRecent"
-              :key="match.id"
-              :match="match"
-              :prediction="predictionByMatchId(match.id)"
-            />
-            <template v-if="loadingMoreRecent">
-              <MatchCardSkeleton v-for="i in 3" :key="`r-skel-${i}`" />
-            </template>
-          </div>
-          <div ref="recentSentinel" class="h-px" />
-        </section>
-
         <!-- Sin partidos -->
         <div v-if="filteredAll.length === 0 && matches.length > 0" class="text-center py-12 text-slate-500">
           <p>No hay partidos en esta fase todavía</p>
@@ -145,15 +146,19 @@ import MatchCard from '@/components/matches/MatchCard.vue'
 import MatchCardSkeleton from '@/components/matches/MatchCardSkeleton.vue'
 import type { Match, MatchStage } from '@/types'
 
+// Nombre explícito para que <keep-alive :include="['home']"> conserve esta vista.
+defineOptions({ name: 'home' })
+
 const { matches, loading, upcomingMatches, liveMatches, finishedMatches } = useMatches()
 const { predictionByMatchId } = usePredictions()
 
 // ── Stage filter ────────────────────────────────────────────────────────────
-type StageFilter = MatchStage | 'all'
+type StageFilter = MatchStage | 'all' | 'recent'
 const activeStage = ref<StageFilter>('all')
 
 const tabs: { label: string; value: StageFilter }[] = [
-  { label: 'Todos', value: 'all' },
+  { label: 'Próximos', value: 'all' },
+  { label: 'Recientes', value: 'recent' },
   { label: 'Grupos', value: 'group' },
   { label: '16avos', value: 'round_of_32' },
   { label: 'Octavos', value: 'round_of_16' },
@@ -170,8 +175,14 @@ function filterByStage<T extends { stage: MatchStage }>(list: T[]) {
 
 const filteredLive = computed(() => filterByStage(liveMatches.value))
 const filteredUpcoming = computed(() => filterByStage(upcomingMatches.value))
-const filteredRecent = computed(() => filterByStage(finishedMatches.value).slice().reverse())
-const filteredAll = computed(() => [...filteredLive.value, ...filteredUpcoming.value, ...filteredRecent.value])
+const filteredAll = computed(() => [...filteredLive.value, ...filteredUpcoming.value])
+
+// ── Recientes: todos los resultados finalizados, sin agrupar, más reciente primero
+const recentMatches = computed(() =>
+  finishedMatches.value
+    .slice()
+    .sort((a, b) => new Date(b.match_date).getTime() - new Date(a.match_date).getTime())
+)
 
 // ── Vista por grupos (accordion) ────────────────────────────────────────────
 const openGroups = ref<Set<string>>(new Set())
@@ -200,21 +211,17 @@ const groupedMatches = computed(() => {
     }))
 })
 
-// ── Infinite scroll ─────────────────────────────────────────────────────────
+// ── Infinite scroll (solo "Próximos") ───────────────────────────────────────
 const BATCH = 10
 const INITIAL = 10
 
 const upcomingCount = ref(INITIAL)
-const recentCount = ref(INITIAL)
 const loadingMoreUpcoming = ref(false)
-const loadingMoreRecent = ref(false)
 
 const visibleUpcoming = computed(() => filteredUpcoming.value.slice(0, upcomingCount.value))
-const visibleRecent = computed(() => filteredRecent.value.slice(0, recentCount.value))
 
-watch([activeStage, filteredUpcoming, filteredRecent], () => {
+watch([activeStage, filteredUpcoming], () => {
   upcomingCount.value = INITIAL
-  recentCount.value = INITIAL
 })
 
 async function loadMore(
@@ -230,7 +237,6 @@ async function loadMore(
 }
 
 const upcomingSentinel = ref<HTMLElement | null>(null)
-const recentSentinel = ref<HTMLElement | null>(null)
 
 function makeObserver(
   count: Ref<number>,
@@ -246,7 +252,6 @@ function makeObserver(
 }
 
 let upcomingObserver: IntersectionObserver | null = null
-let recentObserver: IntersectionObserver | null = null
 
 watch(upcomingSentinel, (el) => {
   upcomingObserver?.disconnect()
@@ -255,15 +260,7 @@ watch(upcomingSentinel, (el) => {
   upcomingObserver.observe(el)
 })
 
-watch(recentSentinel, (el) => {
-  recentObserver?.disconnect()
-  if (!el) return
-  recentObserver = makeObserver(recentCount, filteredRecent, loadingMoreRecent)
-  recentObserver.observe(el)
-})
-
 onUnmounted(() => {
   upcomingObserver?.disconnect()
-  recentObserver?.disconnect()
 })
 </script>

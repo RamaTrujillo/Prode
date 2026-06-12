@@ -15,21 +15,31 @@
       <!-- Nombre -->
       <p class="flex-1 text-white text-sm font-medium truncate">
         {{ entry.username }}
+        <span v-if="isLast(entry)" class="ml-1">🥶</span>
         <span v-if="entry.id === currentUserId" class="text-xs text-blue-400 ml-1">(vos)</span>
       </p>
 
       <!-- Puntos -->
       <p class="text-white font-bold tabular-nums">{{ entry.total_pts }}</p>
-      <span class="text-slate-500 text-xs">pts</span>
+      <span class="text-slate-500 text-xs">{{ ptsUnit(entry.total_pts) }}</span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { LeaderboardEntry } from '@/types'
+import { lastPlacePts } from '@/utils/leaderboard'
+import { ptsUnit } from '@/utils/points'
 
-defineProps<{
+const props = defineProps<{
   entries: LeaderboardEntry[]
   currentUserId: string | null
 }>()
+
+const lastPts = computed(() => lastPlacePts(props.entries))
+
+function isLast(entry: LeaderboardEntry): boolean {
+  return lastPts.value !== null && entry.total_pts === lastPts.value
+}
 </script>

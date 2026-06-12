@@ -3,6 +3,10 @@ import { supabase } from '@/lib/supabase'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
+  // Al volver (atrás/adelante) restaura la posición previa; en navegación nueva, arriba.
+  scrollBehavior(_to, _from, savedPosition) {
+    return savedPosition ?? { top: 0 }
+  },
   routes: [
     {
       path: '/login',

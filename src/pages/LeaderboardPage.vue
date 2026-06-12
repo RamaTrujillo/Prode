@@ -9,11 +9,11 @@
     >
       <div class="flex items-center gap-3">
         <span class="font-bold text-blue-300 text-lg">
-          {{ myEntry.position <= 3 ? ['🥇','🥈','🥉'][myEntry.position - 1] : `#${myEntry.position}` }}
+          {{ iAmLast ? '🫏' : myEntry.position <= 3 ? ['🥇','🥈','🥉'][myEntry.position - 1] : `#${myEntry.position}` }}
         </span>
         <span class="text-white text-sm font-medium">Tu posición</span>
       </div>
-      <span class="text-blue-300 font-bold tabular-nums">{{ myEntry.total_pts }} pts</span>
+      <span class="text-blue-300 font-bold tabular-nums">{{ myEntry.total_pts }} {{ ptsUnit(myEntry.total_pts) }}</span>
     </div>
 
     <div v-if="loading" class="flex justify-center py-12">
@@ -38,6 +38,8 @@ import { useAuthStore } from '@/stores/auth.store'
 import { useLeaderboardStore } from '@/stores/leaderboard.store'
 import { storeToRefs } from 'pinia'
 import LeaderboardTable from '@/components/leaderboard/LeaderboardTable.vue'
+import { lastPlacePts } from '@/utils/leaderboard'
+import { ptsUnit } from '@/utils/points'
 
 const { entries, loading } = useLeaderboard()
 const authStore = useAuthStore()
@@ -45,4 +47,9 @@ const currentUserId = computed(() => authStore.user?.id ?? null)
 
 const leaderboardStore = useLeaderboardStore()
 const { currentUserEntry: myEntry } = storeToRefs(leaderboardStore)
+
+const iAmLast = computed(() => {
+  const lp = lastPlacePts(entries.value)
+  return lp !== null && myEntry.value?.total_pts === lp
+})
 </script>

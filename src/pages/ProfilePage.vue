@@ -6,7 +6,7 @@
       <p class="text-slate-500 text-sm">{{ user?.email }}</p>
       <div class="mt-4 inline-flex items-center gap-2 bg-blue-950 text-blue-300 px-4 py-2 rounded-full">
         <span class="text-lg font-bold">{{ profile?.total_pts ?? 0 }}</span>
-        <span class="text-sm">puntos</span>
+        <span class="text-sm">{{ (profile?.total_pts ?? 0) === 1 ? 'punto' : 'puntos' }}</span>
       </div>
     </div>
 
@@ -97,7 +97,7 @@
             class="w-8 text-center text-xs font-bold rounded-full py-0.5"
             :class="pointsClasses(item.points)"
           >
-            {{ item.points !== null ? item.points + 'p' : '?' }}
+            {{ pointsLabel(item.points) }}
           </span>
 
           <!-- Match info -->
@@ -130,12 +130,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
+import { useMatches } from '@/composables/useMatches'
+import { usePredictions } from '@/composables/usePredictions'
 import { useToast } from '@/composables/useToast'
 import { supabase } from '@/lib/supabase'
 import type { PredictionWithMatch } from '@/types'
+import { pointsBadgeClasses as pointsClasses, pointsLabel } from '@/utils/points'
 
 const router = useRouter()
 const { user, profile, signOut, updateUsername } = useAuth()
@@ -199,32 +202,22 @@ async function handleSignOut() {
   router.push('/login')
 }
 
-// Prediction history
-const history = ref<PredictionWithMatch[]>([])
-const loadingHistory = ref(false)
+// Historial de predicciones: se deriva de los stores (predictions + matches),
+// en vez de una query directa, para no duplicar el camino de datos.
+const { matches, loading: loadingMatches } = useMatches()
+const { predictions, loading: loadingPredictions } = usePredictions()
 
-onMounted(async () => {
-  loadingHistory.value = true
-  try {
-    const { data, error } = await supabase
-      .from('predictions')
-      .select('*, match:matches(*)')
-      .order('created_at', { ascending: false })
-    if (error) throw error
-    history.value = (data ?? []) as PredictionWithMatch[]
-  } finally {
-    loadingHistory.value = false
-  }
+const loadingHistory = computed(() => loadingPredictions.value || loadingMatches.value)
+
+const history = computed<PredictionWithMatch[]>(() => {
+  const byId = new Map(matches.value.map((m) => [m.id, m]))
+  return predictions.value
+    .filter((p) => byId.has(p.match_id))
+    .map((p) => ({ ...p, match: byId.get(p.match_id)! }))
 })
 
 function matchDay(dateStr: string) {
   return new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'short' }).format(new Date(dateStr))
 }
 
-function pointsClasses(points: number | null) {
-  if (points === null) return 'bg-slate-800 text-slate-400'
-  if (points === 3) return 'bg-green-950 text-green-400'
-  if (points === 1) return 'bg-yellow-950 text-yellow-400'
-  return 'bg-red-950 text-red-400'
-}
 </script>
