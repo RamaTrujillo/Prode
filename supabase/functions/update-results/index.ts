@@ -24,9 +24,11 @@ interface ApiMatch {
   homeTeam: { name: string | null }
   awayTeam: { name: string | null }
   score: {
-    fullTime:  ScoreDetail
-    extraTime: ScoreDetail | null  // goles al 120' (null si no hubo tiempo extra)
-    penalties: ScoreDetail | null  // goles solo en la tanda (null si no hubo penales)
+    duration:    string            // 'REGULAR' | 'EXTRA_TIME' | 'PENALTY_SHOOTOUT'
+    fullTime:    ScoreDetail        // OJO: incluye los penales (regularTime + extraTime + tanda)
+    regularTime: ScoreDetail | null // marcador a los 90'
+    extraTime:   ScoreDetail | null // goles SOLO durante el alargue de 30' (no acumulado)
+    penalties:   ScoreDetail | null // goles solo en la tanda (null si no hubo penales)
   }
 }
 
@@ -56,12 +58,27 @@ function mapGroup(apiGroup: string | null): string | null {
   return m ? m[1] : null
 }
 
-// Devuelve el score definitivo del partido:
-// - Si hubo tiempo extra: score al 120' (incluye goles en ET, excluye penales)
-// - Si no: score a los 90'
+// Devuelve el marcador que cuenta para el Prode: el resultado al final del
+// partido EXCLUYENDO la tanda de penales (a los 90' o, si hubo, a los 120').
+//
+// Importante sobre football-data.org v4:
+//  - `fullTime` trae el TOTAL incluyendo la tanda de penales
+//    (p. ej. 1-1 + tanda 3-4 => fullTime 4-5). No sirve para penales.
+//  - `regularTime` = marcador a los 90'.
+//  - `extraTime`   = goles SOLO durante el alargue de 30' (no acumulado;
+//    suele ser 0-0 en los partidos que terminan yendo a penales).
+//  - El marcador real a los 120' = regularTime + extraTime.
+//
+// En partidos sin alargue, `regularTime` no viene y `fullTime` ya es correcto.
 function finalScore(score: ApiMatch['score']): ScoreDetail {
-  const et = score.extraTime
-  if (et && et.home !== null && et.away !== null) return et
+  const reg = score.regularTime
+  if (reg && reg.home !== null && reg.away !== null) {
+    const et = score.extraTime
+    return {
+      home: reg.home + (et?.home ?? 0),
+      away: reg.away + (et?.away ?? 0),
+    }
+  }
   return score.fullTime
 }
 
