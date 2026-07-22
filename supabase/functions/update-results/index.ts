@@ -5,84 +5,114 @@ const supabase = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 )
 
-const FOOTBALL_API_KEY = Deno.env.get('FOOTBALL_API_KEY')!
-const API_BASE = 'https://api.football-data.org/v4'
+// TheSportsDB: la API key va en el path. '3' es la key de prueba (datos reales,
+// pero puede venir limitada); conviene poner una key propia gratuita vía secret.
+const TSDB_KEY = Deno.env.get('THESPORTSDB_KEY') ?? '3'
+const API_BASE = `https://www.thesportsdb.com/api/v1/json/${TSDB_KEY}`
 
-type MatchStage = 'group' | 'round_of_32' | 'round_of_16' | 'quarter' | 'semi' | 'third_place' | 'final'
+type MatchStage = 'group' | 'round_of_16' | 'quarter' | 'semi' | 'final'
 
-interface ScoreDetail {
-  home: number | null
-  away: number | null
+// ── TheSportsDB: shapes ──────────────────────────────────────────────────────
+interface TsdbEvent {
+  idEvent: string
+  strEvent: string | null
+  strHomeTeam: string | null
+  strAwayTeam: string | null
+  intHomeScore: string | null
+  intAwayScore: string | null
+  strStatus: string | null
+  strStage: string | null
+  dateEvent: string | null        // 'YYYY-MM-DD'
+  strTimestamp: string | null     // 'YYYY-MM-DDTHH:mm:ss' (UTC)
+  strHomeTeamBadge: string | null
+  strAwayTeamBadge: string | null
 }
 
-interface ApiMatch {
-  id: number
-  utcDate: string
-  status: string
-  stage: string
-  group: string | null
-  homeTeam: { name: string | null }
-  awayTeam: { name: string | null }
-  score: {
-    duration:    string            // 'REGULAR' | 'EXTRA_TIME' | 'PENALTY_SHOOTOUT'
-    fullTime:    ScoreDetail        // OJO: incluye los penales (regularTime + extraTime + tanda)
-    regularTime: ScoreDetail | null // marcador a los 90'
-    extraTime:   ScoreDetail | null // goles SOLO durante el alargue de 30' (no acumulado)
-    penalties:   ScoreDetail | null // goles solo en la tanda (null si no hubo penales)
+interface TsdbStanding {
+  strTeam: string | null
+  strBadge: string | null
+  strGroup: string | null         // p. ej. 'Clausura - Group A'
+}
+
+interface TeamInfo {
+  zone: string | null
+  badge: string | null
+}
+
+// ── Mapeos ───────────────────────────────────────────────────────────────────
+
+// Fase a partir de pistas de texto (strStage / nombre del evento). En la fase
+// regular no hay indicios → 'group'. Cubre variantes inglés/español de playoffs.
+function mapStage(ev: TsdbEvent): MatchStage {
+  const s = `${ev.strStage ?? ''} ${ev.strEvent ?? ''}`.toLowerCase()
+  if (/\bfinal\b/.test(s) && !/semi|quarter|cuarto/.test(s)) return 'final'
+  if (/semi/.test(s)) return 'semi'
+  if (/quarter|cuarto/.test(s)) return 'quarter'
+  if (/round of 16|octavo|8th/.test(s)) return 'round_of_16'
+  return 'group'
+}
+
+function mapStatus(status: string | null): 'scheduled' | 'live' | 'finished' {
+  const s = (status ?? '').toUpperCase()
+  if (['FT', 'AET', 'PEN', 'MATCH FINISHED'].includes(s)) return 'finished'
+  if (['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE'].includes(s)) return 'live'
+  return 'scheduled' // NS, NOT STARTED, PST, POSTPONED, CANCELLED, '', ...
+}
+
+// Zona ('A'/'B') a partir del strGroup de las posiciones ('Clausura - Group A').
+function parseZone(group: string | null): string | null {
+  if (!group) return null
+  const m = group.match(/group\s*([AB])/i) ?? group.match(/zona\s*([AB])/i) ?? group.match(/\b([AB])\b/i)
+  return m ? m[1].toUpperCase() : null
+}
+
+// Normaliza el timestamp a UTC explícito para la columna timestamptz.
+function toMatchDate(ev: TsdbEvent): string | null {
+  const ts = ev.strTimestamp
+  if (ts) return /[Z]|[+-]\d\d:?\d\d$/.test(ts) ? ts : `${ts}Z`
+  return ev.dateEvent // solo fecha, sin hora
+}
+
+async function fetchEvents(url: string): Promise<TsdbEvent[]> {
+  try {
+    const res = await fetch(url)
+    if (!res.ok) return []
+    const data = await res.json() as { events: TsdbEvent[] | null }
+    return data.events ?? []
+  } catch (_) {
+    return []
   }
 }
 
-const STAGE_MAP: Record<string, MatchStage> = {
-  GROUP_STAGE:    'group',
-  LAST_32:        'round_of_32',
-  LAST_16:        'round_of_16',
-  QUARTER_FINALS: 'quarter',
-  SEMI_FINALS:    'semi',
-  THIRD_PLACE:    'third_place',
-  FINAL:          'final',
-}
-
-function mapStage(apiStage: string): MatchStage | null {
-  return STAGE_MAP[apiStage] ?? null
-}
-
-function mapStatus(apiStatus: string): 'scheduled' | 'live' | 'finished' {
-  if (apiStatus === 'FINISHED') return 'finished'
-  if (['IN_PLAY', 'PAUSED', 'HALFTIME', 'EXTRA_TIME', 'PENALTY_SHOOTOUT'].includes(apiStatus)) return 'live'
-  return 'scheduled'
-}
-
-function mapGroup(apiGroup: string | null): string | null {
-  if (!apiGroup) return null
-  const m = apiGroup.match(/GROUP_([A-Z])/)
-  return m ? m[1] : null
-}
-
-// Devuelve el marcador que cuenta para el Prode: el resultado al final del
-// partido EXCLUYENDO la tanda de penales (a los 90' o, si hubo, a los 120').
-//
-// Importante sobre football-data.org v4:
-//  - `fullTime` trae el TOTAL incluyendo la tanda de penales
-//    (p. ej. 1-1 + tanda 3-4 => fullTime 4-5). No sirve para penales.
-//  - `regularTime` = marcador a los 90'.
-//  - `extraTime`   = goles SOLO durante el alargue de 30' (no acumulado;
-//    suele ser 0-0 en los partidos que terminan yendo a penales).
-//  - El marcador real a los 120' = regularTime + extraTime.
-//
-// En partidos sin alargue, `regularTime` no viene y `fullTime` ya es correcto.
-function finalScore(score: ApiMatch['score']): ScoreDetail {
-  const reg = score.regularTime
-  if (reg && reg.home !== null && reg.away !== null) {
-    const et = score.extraTime
-    return {
-      home: reg.home + (et?.home ?? 0),
-      away: reg.away + (et?.away ?? 0),
+// Mapa team → { zona, escudo } desde /lookuptable. Best-effort: si aún no hay
+// tabla del Clausura (recién arranca) devuelve un mapa vacío y la fase regular
+// queda sin zona hasta que la API la publique.
+async function fetchTeamInfo(leagueId: number, season: number, roundFilter: string | null): Promise<Map<string, TeamInfo>> {
+  const map = new Map<string, TeamInfo>()
+  try {
+    const res = await fetch(`${API_BASE}/lookuptable.php?l=${leagueId}&s=${season}`)
+    if (!res.ok) return map
+    const data = await res.json() as { table: TsdbStanding[] | null }
+    for (const row of data.table ?? []) {
+      // Dentro de la misma temporada conviven Apertura y Clausura; nos quedamos
+      // con las filas del torneo (strGroup contiene, p. ej., 'Clausura').
+      if (roundFilter && !(row.strGroup ?? '').toLowerCase().includes(roundFilter.toLowerCase())) continue
+      if (row.strTeam) map.set(row.strTeam, { zone: parseZone(row.strGroup), badge: row.strBadge })
     }
+  } catch (_) {
+    // best-effort
   }
-  return score.fullTime
+  return map
 }
 
 const CRON_SECRET = Deno.env.get('CRON_SECRET')
+
+function jsonError(message: string, status: number, extra?: Record<string, unknown>) {
+  return new Response(
+    JSON.stringify({ error: message, ...extra }),
+    { status, headers: { 'Content-Type': 'application/json' } }
+  )
+}
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') {
@@ -91,65 +121,83 @@ Deno.serve(async (req) => {
 
   if (CRON_SECRET) {
     const incoming = req.headers.get('x-cron-secret')
-    if (incoming !== CRON_SECRET) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-      })
-    }
+    if (incoming !== CRON_SECRET) return jsonError('Unauthorized', 401)
   }
 
-  if (!FOOTBALL_API_KEY) {
-    return new Response(JSON.stringify({ error: 'FOOTBALL_API_KEY no configurado' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
+  // Torneo a sincronizar: el activo que tenga liga externa (el Mundial no tiene).
+  const { data: tournament, error: tErr } = await supabase
+    .from('tournaments')
+    .select('id, external_league_id, season, round_filter, starts_on')
+    .eq('is_active', true)
+    .not('external_league_id', 'is', null)
+    .maybeSingle()
+
+  if (tErr) return jsonError(tErr.message, 500)
+  if (!tournament) return jsonError('No hay torneo activo con external_league_id configurado', 400)
+
+  const leagueId = tournament.external_league_id as number
+  const season = tournament.season as number
+  const roundFilter = tournament.round_filter as string | null
+  const startsOn = tournament.starts_on as string | null // 'YYYY-MM-DD'
+
+  // Próximos + pasados (endpoints "en vivo", siempre frescos) y, si está
+  // disponible en el plan, la temporada completa. Se mergean por idEvent.
+  const [next, past, seasonEvents] = await Promise.all([
+    fetchEvents(`${API_BASE}/eventsnextleague.php?id=${leagueId}`),
+    fetchEvents(`${API_BASE}/eventspastleague.php?id=${leagueId}`),
+    fetchEvents(`${API_BASE}/eventsseason.php?id=${leagueId}&s=${season}`),
+  ])
+
+  const byId = new Map<string, TsdbEvent>()
+  // Orden: primero temporada, luego past/next (más frescos pisan a la temporada).
+  for (const ev of [...seasonEvents, ...past, ...next]) {
+    if (ev?.idEvent) byId.set(ev.idEvent, ev)
+  }
+
+  const teamInfo = await fetchTeamInfo(leagueId, season, roundFilter)
+
+  const rows = [...byId.values()]
+    .filter((ev) => {
+      if (!ev.strHomeTeam || !ev.strAwayTeam) return false
+      // Descartar lo anterior al arranque del torneo (p. ej. el Apertura).
+      if (startsOn && ev.dateEvent && ev.dateEvent < startsOn) return false
+      return true
     })
-  }
-
-  const res = await fetch(`${API_BASE}/competitions/WC/matches`, {
-    headers: { 'X-Auth-Token': FOOTBALL_API_KEY },
-  })
-
-  if (!res.ok) {
-    return new Response(
-      JSON.stringify({ error: `football-data.org HTTP ${res.status}` }),
-      { status: 502, headers: { 'Content-Type': 'application/json' } }
-    )
-  }
-
-  const data = await res.json() as { matches: ApiMatch[] }
-
-  const rows = data.matches
-    .map((m) => {
-      const stage = mapStage(m.stage)
-      if (!stage || !m.homeTeam?.name || !m.awayTeam?.name) return null
-
-      const score = finalScore(m.score)
+    .map((ev) => {
+      const stage = mapStage(ev)
+      const homeInfo = teamInfo.get(ev.strHomeTeam!)
+      const awayInfo = teamInfo.get(ev.strAwayTeam!)
+      const toScore = (v: string | null) => (v === null || v === '' ? null : Number(v))
 
       return {
-        external_id: String(m.id),
-        match_date:  m.utcDate,
-        home_team:   m.homeTeam.name,
-        away_team:   m.awayTeam.name,
-        status:      mapStatus(m.status),
+        external_id:   ev.idEvent,
+        tournament_id: tournament.id,
+        match_date:    toMatchDate(ev),
+        home_team:     ev.strHomeTeam,
+        away_team:     ev.strAwayTeam,
+        home_crest:    ev.strHomeTeamBadge ?? homeInfo?.badge ?? null,
+        away_crest:    ev.strAwayTeamBadge ?? awayInfo?.badge ?? null,
+        status:        mapStatus(ev.strStatus),
         stage,
-        group_name:  mapGroup(m.group),
-        home_score:  score.home,
-        away_score:  score.away,
+        group_name:    stage === 'group' ? (homeInfo?.zone ?? null) : null,
+        home_score:    toScore(ev.intHomeScore),
+        away_score:    toScore(ev.intAwayScore),
       }
     })
-    .filter(Boolean)
+    .filter((r) => r.match_date) // sin fecha no se puede programar
+
+  if (rows.length === 0) {
+    return new Response(
+      JSON.stringify({ synced: 0, total: 0, note: 'Sin eventos del torneo (¿API limitada o torneo sin fixture aún?)' }),
+      { headers: { 'Content-Type': 'application/json' } }
+    )
+  }
 
   const { error, count } = await supabase
     .from('matches')
     .upsert(rows, { onConflict: 'external_id', count: 'exact' })
 
-  if (error) {
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    )
-  }
+  if (error) return jsonError(error.message, 500)
 
   return new Response(
     JSON.stringify({ synced: count, total: rows.length }),

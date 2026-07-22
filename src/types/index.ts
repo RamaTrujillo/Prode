@@ -1,5 +1,20 @@
 export type MatchStatus = 'scheduled' | 'live' | 'finished'
+// Union de todas las fases posibles entre torneos. El Mundial usa 'round_of_32'
+// y 'third_place'; el Clausura usa 'group' (zonas) + octavos → cuartos → semis →
+// final. La app muestra un torneo a la vez, así que solo aparecen las fases que
+// ese torneo realmente tiene.
 export type MatchStage = 'group' | 'round_of_32' | 'round_of_16' | 'quarter' | 'semi' | 'third_place' | 'final'
+
+export interface Tournament {
+  id: number
+  name: string
+  slug: string
+  season: number | null
+  external_league_id: number | null
+  round_filter: string | null
+  group_label: string // término de la fase de grupos: 'Grupo' | 'Zona'
+  is_active: boolean
+}
 
 export interface Match {
   id: string
@@ -11,6 +26,9 @@ export interface Match {
   status: MatchStatus
   stage: MatchStage
   group_name: string | null
+  home_crest: string | null
+  away_crest: string | null
+  tournament_id: number | null
   external_id: string
   created_at: string
 }

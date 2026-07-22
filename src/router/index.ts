@@ -50,6 +50,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/admin',
+      name: 'admin',
+      component: () => import('@/pages/AdminPage.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: () => import('@/pages/NotFoundPage.vue'),
@@ -66,6 +72,10 @@ router.beforeEach(async (to) => {
   }
   if (to.meta.requiresGuest && isAuthenticated) {
     return { name: 'home' }
+  }
+  if (to.meta.requiresAdmin) {
+    const isAdmin = session?.user?.app_metadata?.role === 'admin'
+    if (!isAdmin) return { name: 'home' }
   }
 })
 

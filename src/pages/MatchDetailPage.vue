@@ -25,11 +25,14 @@
       <div class="flex items-center justify-between gap-4">
         <div class="flex-1 flex flex-col items-center gap-2">
           <img
-            v-if="homeFlag"
-            :src="homeFlag"
+            v-if="homeImg"
+            :src="homeImg"
             :alt="match.home_team"
-            class="w-12 h-9 object-cover rounded-[3px] shadow"
+            class="w-12 h-12 object-contain"
           />
+          <div v-else class="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-300">
+            {{ getTeamInitials(match.home_team) }}
+          </div>
           <p class="font-semibold text-white text-sm text-center">{{ match.home_team }}</p>
         </div>
 
@@ -45,11 +48,14 @@
 
         <div class="flex-1 flex flex-col items-center gap-2">
           <img
-            v-if="awayFlag"
-            :src="awayFlag"
+            v-if="awayImg"
+            :src="awayImg"
             :alt="match.away_team"
-            class="w-12 h-9 object-cover rounded-[3px] shadow"
+            class="w-12 h-12 object-contain"
           />
+          <div v-else class="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-300">
+            {{ getTeamInitials(match.away_team) }}
+          </div>
           <p class="font-semibold text-white text-sm text-center">{{ match.away_team }}</p>
         </div>
       </div>
@@ -138,6 +144,7 @@ import { storeToRefs } from 'pinia'
 import { useMatchesStore } from '@/stores/matches.store'
 import { usePredictionsStore } from '@/stores/predictions.store'
 import { useToast } from '@/composables/useToast'
+import { getCrestUrl, getTeamInitials } from '@/utils/crests'
 import { getFlagUrlLarge } from '@/utils/flags'
 import { pointsTextClasses, ptsUnit } from '@/utils/points'
 
@@ -159,8 +166,13 @@ matchesStore.fetchMatchById(route.params.id as string)
 const predictionsStore = usePredictionsStore()
 const { success: toastSuccess, error: toastError } = useToast()
 
-const homeFlag = computed(() => match.value ? getFlagUrlLarge(match.value.home_team) : null)
-const awayFlag = computed(() => match.value ? getFlagUrlLarge(match.value.away_team) : null)
+// Escudo del club (Clausura) o bandera de la selección (Mundial) como fallback.
+const homeImg = computed(() =>
+  match.value ? getCrestUrl(match.value.home_crest) ?? getFlagUrlLarge(match.value.home_team) : null
+)
+const awayImg = computed(() =>
+  match.value ? getCrestUrl(match.value.away_crest) ?? getFlagUrlLarge(match.value.away_team) : null
+)
 const existing = computed(() =>
   match.value ? predictionsStore.predictionByMatchId(match.value.id) : undefined
 )

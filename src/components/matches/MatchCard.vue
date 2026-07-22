@@ -15,12 +15,14 @@
       <div class="flex-1 flex items-center justify-end gap-2">
         <p class="font-medium text-white text-sm text-right">{{ match.home_team }}</p>
         <img
-          v-if="homeFlag"
-          :src="homeFlag"
+          v-if="homeImg"
+          :src="homeImg"
           :alt="match.home_team"
-          class="w-6 h-[18px] object-cover rounded-[2px] flex-shrink-0"
+          class="w-6 h-6 object-contain flex-shrink-0"
         />
-        <div v-else class="w-6 h-[18px] bg-slate-700 rounded-[2px] flex-shrink-0" />
+        <div v-else class="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-[9px] font-bold text-slate-300 flex-shrink-0">
+          {{ getTeamInitials(match.home_team) }}
+        </div>
       </div>
 
       <!-- Marcador / horario -->
@@ -37,12 +39,14 @@
       <!-- Equipo visitante -->
       <div class="flex-1 flex items-center gap-2">
         <img
-          v-if="awayFlag"
-          :src="awayFlag"
+          v-if="awayImg"
+          :src="awayImg"
           :alt="match.away_team"
-          class="w-6 h-[18px] object-cover rounded-[2px] flex-shrink-0"
+          class="w-6 h-6 object-contain flex-shrink-0"
         />
-        <div v-else class="w-6 h-[18px] bg-slate-700 rounded-[2px] flex-shrink-0" />
+        <div v-else class="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-[9px] font-bold text-slate-300 flex-shrink-0">
+          {{ getTeamInitials(match.away_team) }}
+        </div>
         <p class="font-medium text-white text-sm">{{ match.away_team }}</p>
       </div>
     </div>
@@ -69,16 +73,22 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Match, Prediction } from '@/types'
+import { getCrestUrl, getTeamInitials } from '@/utils/crests'
 import { getFlagUrl } from '@/utils/flags'
 import { pointsBadgeClasses, ptsUnit } from '@/utils/points'
+import { useMatchesStore } from '@/stores/matches.store'
 
 const props = defineProps<{
   match: Match
   prediction?: Prediction
 }>()
 
-const homeFlag = computed(() => getFlagUrl(props.match.home_team))
-const awayFlag = computed(() => getFlagUrl(props.match.away_team))
+const matchesStore = useMatchesStore()
+
+// Escudo del club (Clausura) o, si no hay, bandera de la selección (Mundial).
+// Si no hay ninguno, la UI cae al placeholder con iniciales.
+const homeImg = computed(() => getCrestUrl(props.match.home_crest) ?? getFlagUrl(props.match.home_team))
+const awayImg = computed(() => getCrestUrl(props.match.away_crest) ?? getFlagUrl(props.match.away_team))
 
 const matchTime = computed(() =>
   new Intl.DateTimeFormat('es-AR', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
@@ -87,7 +97,11 @@ const matchTime = computed(() =>
 
 const stageLabel = computed(() => {
   const { stage, group_name } = props.match
-  if (stage === 'group') return group_name ? `Grupo ${group_name}` : 'Fase de grupos'
+  if (stage === 'group') {
+    const term = matchesStore.activeTournament?.group_label ?? 'Grupo'
+    if (!group_name) return term === 'Zona' ? 'Fase regular' : 'Fase de grupos'
+    return `${term} ${group_name}`
+  }
   const map: Record<string, string> = {
     round_of_32: 'Dieciseisavos de final',
     round_of_16: 'Octavos de final',

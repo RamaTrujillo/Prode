@@ -18,12 +18,17 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-const $route = useRoute()
+import { useAuth } from '@/composables/useAuth'
 
-const navItems = [
+const $route = useRoute()
+const { isAdmin } = useAuth()
+
+const navItems = computed(() => [
   { to: '/', icon: '🏟️', label: 'Partidos' },
   { to: '/leaderboard', icon: '🏆', label: 'Tabla' },
   { to: '/profile', icon: '👤', label: 'Perfil' },
-]
+  ...(isAdmin.value ? [{ to: '/admin', icon: '⚙️', label: 'Admin' }] : []),
+])
 </script>

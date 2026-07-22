@@ -13,9 +13,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'icons/*.png'],
       manifest: {
-        name: 'Prode Mundial 2026',
-        short_name: 'Prode 2026',
-        description: 'Predicciones para el Mundial de Fútbol 2026',
+        name: 'Prode Clausura 2026',
+        short_name: 'Prode Clausura',
+        description: 'Predicciones para el Torneo Clausura 2026 de la Liga Profesional argentina',
         theme_color: '#1d4ed8',
         background_color: '#0f172a',
         display: 'standalone',

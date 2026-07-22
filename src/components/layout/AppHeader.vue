@@ -3,7 +3,7 @@
     <div class="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
       <RouterLink to="/" class="flex items-center gap-2 font-bold text-white">
         <span>⚽</span>
-        <span class="text-sm">Prode 2026</span>
+        <span class="text-sm">Prode Clausura 2026</span>
       </RouterLink>
       <RouterLink to="/profile" class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-sm font-bold text-white">
         {{ initial }}

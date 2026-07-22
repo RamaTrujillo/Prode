@@ -10,6 +10,9 @@ export const useAuthStore = defineStore('auth', () => {
   const loading = ref(false)
 
   const isAuthenticated = computed(() => !!user.value)
+  // Admin = role 'admin' en app_metadata (seteado del lado servidor; el claim
+  // viaja en el JWT, no es editable por el usuario).
+  const isAdmin = computed(() => user.value?.app_metadata?.role === 'admin')
 
   async function initialize() {
     const { data: { session } } = await supabase.auth.getSession()
@@ -67,6 +70,7 @@ export const useAuthStore = defineStore('auth', () => {
     profile,
     loading,
     isAuthenticated,
+    isAdmin,
     initialize,
     fetchProfile,
     signInWithEmail,

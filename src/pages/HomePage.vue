@@ -37,7 +37,7 @@
             class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-800/50 transition-colors"
           >
             <div class="flex items-center gap-3">
-              <span class="text-sm font-semibold text-white">Grupo {{ group.name }}</span>
+              <span class="text-sm font-semibold text-white">{{ groupTerm }} {{ group.name }}</span>
               <span class="text-xs text-slate-500">{{ group.matches.length }} partidos</span>
               <span v-if="group.liveCount > 0" class="flex items-center gap-1 text-xs text-red-400">
                 <span class="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
@@ -67,7 +67,7 @@
         </div>
 
         <div v-if="groupedMatches.length === 0" class="text-center py-12 text-slate-500">
-          <p>No hay partidos de grupos todavía</p>
+          <p>No hay partidos de la fase regular todavía</p>
         </div>
       </template>
 
@@ -142,6 +142,7 @@
 import { ref, computed, watch, onUnmounted, type Ref, type ComputedRef } from 'vue'
 import { useMatches } from '@/composables/useMatches'
 import { usePredictions } from '@/composables/usePredictions'
+import { useMatchesStore } from '@/stores/matches.store'
 import MatchCard from '@/components/matches/MatchCard.vue'
 import MatchCardSkeleton from '@/components/matches/MatchCardSkeleton.vue'
 import type { Match, MatchStage } from '@/types'
@@ -151,22 +152,42 @@ defineOptions({ name: 'home' })
 
 const { matches, loading, upcomingMatches, liveMatches, finishedMatches } = useMatches()
 const { predictionByMatchId } = usePredictions()
+const matchesStore = useMatchesStore()
 
 // ── Stage filter ────────────────────────────────────────────────────────────
 type StageFilter = MatchStage | 'all' | 'recent'
 const activeStage = ref<StageFilter>('all')
 
-const tabs: { label: string; value: StageFilter }[] = [
+// Término de la fase de grupos según el torneo activo ('Zona' / 'Grupo').
+const groupTerm = computed(() => matchesStore.activeTournament?.group_label ?? 'Grupo')
+
+// Orden canónico de fases y sus labels (para los playoffs). La fase 'group' usa
+// el término del torneo ('Zonas' / 'Grupos'), por eso no está en este mapa.
+const STAGE_ORDER: MatchStage[] = ['group', 'round_of_32', 'round_of_16', 'quarter', 'semi', 'third_place', 'final']
+const STAGE_TAB_LABELS: Partial<Record<MatchStage, string>> = {
+  round_of_32: '16avos',
+  round_of_16: 'Octavos',
+  quarter: 'Cuartos',
+  semi: 'Semis',
+  third_place: '3er puesto',
+  final: 'Final',
+}
+
+// Fases realmente presentes en el torneo activo (así los tabs se adaptan solos
+// a cada torneo: el Clausura no muestra 16avos/3er puesto, el Mundial sí).
+const presentStages = computed(() => {
+  const set = new Set(matches.value.map((m: Match) => m.stage))
+  return STAGE_ORDER.filter(s => set.has(s))
+})
+
+const tabs = computed<{ label: string; value: StageFilter }[]>(() => [
   { label: 'Próximos', value: 'all' },
   { label: 'Recientes', value: 'recent' },
-  { label: 'Grupos', value: 'group' },
-  { label: '16avos', value: 'round_of_32' },
-  { label: 'Octavos', value: 'round_of_16' },
-  { label: 'Cuartos', value: 'quarter' },
-  { label: 'Semis', value: 'semi' },
-  { label: '3er puesto', value: 'third_place' },
-  { label: 'Final', value: 'final' },
-]
+  ...presentStages.value.map(s => ({
+    label: s === 'group' ? `${groupTerm.value}s` : (STAGE_TAB_LABELS[s] ?? s),
+    value: s as StageFilter,
+  })),
+])
 
 function filterByStage<T extends { stage: MatchStage }>(list: T[]) {
   if (activeStage.value === 'all') return list

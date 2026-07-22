@@ -3,7 +3,7 @@
     <div class="w-full max-w-sm">
       <div class="text-center mb-8">
         <div class="text-5xl mb-3">⚽</div>
-        <h1 class="text-2xl font-bold text-white">Prode Mundial 2026</h1>
+        <h1 class="text-2xl font-bold text-white">Prode Clausura 2026</h1>
         <p class="text-slate-400 mt-1 text-sm">Entrá para hacer tus predicciones</p>
       </div>
 
